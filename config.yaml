@@ -1,0 +1,43 @@
+# Server-Konfiguration
+server:
+  host: "0.0.0.0"       # Bind-Adresse für den Modbus-Server
+  port: 5020            # Modbus-Server-Port
+
+# Liste der Modbus-Clients, die der Proxy regelmäßig abfragt
+clients:
+  - id: 1
+    host: "192.168.1.10"
+    port: 502
+    unit_id: 1
+    interval: 5         # Abfrageintervall in Sekunden
+    timeout: 3          # Timeout in Sekunden für die Verbindung (optional)
+    register_type: "all" # Optionen: holding, input, coil, discrete, all
+    max_retries: 5       # Maximale Anzahl von Wiederholungen vor einer längeren Pause (optional)
+
+  - id: 2
+    host: "192.168.1.11"
+    port: 502
+    unit_id: 2
+    interval: 10
+    timeout: 3
+    register_type: "holding"
+    max_retries: 5
+
+# Speicheroptionen
+storage:
+  type: "ram"               # Optionen: "ram" für RAM-basierter Speicher oder "ramdisk" für RAM-Disk
+  path: "/tmp/modbus_data.txt"  # Pfad für RAM-Disk-Speicherung (nur wenn type = "ramdisk")
+
+# Cache-Einstellungen
+cache:
+  ttl: 60                   # Time-to-Live (TTL) für den Cache in Sekunden
+
+# Logging-Einstellungen
+logging:
+  enabled: true             # Aktiviert oder deaktiviert Logging
+  level: "INFO"             # Logging-Level: DEBUG, INFO, WARNING, ERROR
+
+# Health-Check-Einstellungen
+health_check:
+  enabled: true             # Aktiviert regelmäßige Health-Checks
+  interval: 300             # Intervall in Sekunden für den Health-Check (z. B. alle 5 Minuten)
