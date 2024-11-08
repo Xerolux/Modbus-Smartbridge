@@ -1,0 +1,4 @@
+pymodbus==2.5.3       # Für die Modbus-Kommunikation
+pyyaml==6.0           # Für das Laden und Verarbeiten der YAML-Konfigurationsdatei
+cachetools==5.3.0     # Für den TTL-Cache, um Abfragedaten temporär zu speichern
+watchdog==2.1.9       # Für die Überwachung und das dynamische Nachladen der Konfigurationsdatei
