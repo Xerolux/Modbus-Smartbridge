@@ -5,60 +5,79 @@ INSTALL_DIR="/etc/modbus_smartbridge"
 SERVICE_FILE="/etc/systemd/system/modbus_smartbridge.service"
 CONFIG_FILE="$INSTALL_DIR/config.yaml"
 CONFIG_SCRIPT="/usr/local/bin/modbus_smartbridge_config.sh"
+LOG_FILE="/var/log/modbus_smartbridge_install.log"
 
-echo "Modbus SmartBridge Installation wird gestartet..."
+# Funktion zur Protokollierung
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a "$LOG_FILE"
+}
+
+# Funktion zur Überprüfung und Installation von Paketen
+install_package() {
+    if ! command -v "$1" &> /dev/null; then
+        log_message "$1 wird installiert..."
+        sudo apt install -y "$1"
+    else
+        log_message "$1 ist bereits installiert."
+    fi
+}
+
+# Funktion zur Überprüfung der Netzwerkverbindung
+check_network() {
+    if ! ping -c 1 google.com &> /dev/null; then
+        log_message "Netzwerkverbindung fehlt. Bitte stellen Sie sicher, dass Sie mit dem Internet verbunden sind."
+        exit 1
+    else
+        log_message "Netzwerkverbindung erfolgreich."
+    fi
+}
 
 # Funktion zur Installation
 install() {
-    echo "Starte Installation von Modbus SmartBridge..."
+    log_message "Starte Installation von Modbus SmartBridge..."
 
-    # Überprüfen, ob das Betriebssystem Debian/Ubuntu ist
-    if ! grep -Ei 'debian|ubuntu' /etc/os-release > /dev/null; then
-        echo "Dieses Installationsskript unterstützt nur Debian- und Ubuntu-basierte Systeme."
-        echo "Bitte installieren Sie Python 3 und python3-venv manuell und führen Sie die Installation erneut durch."
-        exit 1
-    fi
+    # Überprüfen der Netzwerkverbindung
+    check_network
 
-    # Überprüfen und Installieren von Python3, venv und whiptail, falls nicht vorhanden
-    if ! command -v python3 &> /dev/null; then
-        echo "Python3 wird installiert..."
-        sudo apt update
-        sudo apt install -y python3
-    fi
+    # System aktualisieren und upgraden
+    log_message "Führe Systemupdate und Upgrade durch..."
+    sudo apt update && sudo apt upgrade -y
 
-    if ! python3 -m venv --help &> /dev/null; then
-        echo "Python3 venv wird installiert..."
-        sudo apt install -y python3-venv
-    fi
-
-    if ! command -v whiptail &> /dev/null; then
-        echo "Whiptail wird installiert..."
-        sudo apt install -y whiptail
-    fi
+    # Überprüfen und Installieren von Python3, venv und whiptail
+    install_package python3
+    install_package python3-venv
+    install_package whiptail
 
     # Installationsverzeichnis erstellen und Dateien kopieren
-    echo "Erstelle Verzeichnis $INSTALL_DIR..."
+    log_message "Erstelle Verzeichnis $INSTALL_DIR..."
     sudo mkdir -p $INSTALL_DIR
-    echo "Kopiere Dateien..."
+    log_message "Kopiere Dateien..."
     sudo cp -r . $INSTALL_DIR
 
     # Virtuelle Umgebung erstellen und Abhängigkeiten installieren
-    echo "Erstelle virtuelle Umgebung und installiere Abhängigkeiten..."
+    log_message "Erstelle virtuelle Umgebung und installiere Abhängigkeiten..."
     cd $INSTALL_DIR
     python3 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
+
+    # Anforderungen installieren und Fehler überprüfen
+    log_message "Installiere Python-Abhängigkeiten..."
+    if ! pip install -r requirements.txt; then
+        log_message "Fehler beim Installieren der Abhängigkeiten."
+        exit 1
+    fi
+    log_message "Abhängigkeiten erfolgreich installiert."
 
     # Beispiel-Konfigurationsdatei erstellen, falls keine vorhanden ist
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo "Erstelle Beispiel-Konfigurationsdatei..."
+        log_message "Erstelle Beispiel-Konfigurationsdatei..."
         sudo cp config.yaml.example "$CONFIG_FILE"
     else
-        echo "Konfigurationsdatei vorhanden, wird nicht überschrieben."
+        log_message "Konfigurationsdatei vorhanden, wird nicht überschrieben."
     fi
 
     # Systemd-Service-Datei erstellen
-    echo "Erstelle Systemd-Service..."
+    log_message "Erstelle Systemd-Service..."
     sudo bash -c "cat > $SERVICE_FILE" << EOL
 [Unit]
 Description=Modbus SmartBridge Service
@@ -76,27 +95,35 @@ WantedBy=multi-user.target
 EOL
 
     # Konfigurationsskript global verfügbar machen
-    echo "Erstelle globales Konfigurationsskript..."
+    log_message "Erstelle globales Konfigurationsskript..."
     sudo cp $INSTALL_DIR/modbus_smartbridge_config.sh $CONFIG_SCRIPT
     sudo chmod +x $CONFIG_SCRIPT
 
     # Service starten und aktivieren
-    echo "Aktiviere und starte den Modbus SmartBridge Service..."
+    log_message "Aktiviere und starte den Modbus SmartBridge Service..."
     sudo systemctl daemon-reload
     sudo systemctl enable modbus_smartbridge.service
     sudo systemctl start modbus_smartbridge.service
 
-    echo "Modbus SmartBridge wurde erfolgreich installiert und gestartet."
+    # Überprüfen, ob der Dienst erfolgreich gestartet wurde
+    if ! systemctl is-active --quiet modbus_smartbridge.service; then
+        log_message "Der Dienst konnte nicht gestartet werden. Bitte prüfen Sie die Log-Datei."
+        echo "Der Dienst läuft nicht. Führen Sie 'sudo systemctl status modbus_smartbridge.service' zur Fehleranalyse aus."
+    else
+        log_message "Dienst läuft erfolgreich."
+    fi
+
+    log_message "Modbus SmartBridge wurde erfolgreich installiert und gestartet."
     echo "Sie können die Konfiguration jetzt mit dem Befehl 'modbus_smartbridge_config.sh' ändern."
     echo "Zum Neustarten des Dienstes: sudo systemctl restart modbus_smartbridge.service"
 }
 
 # Funktion zur Deinstallation
 uninstall() {
-    echo "Starte Deinstallation..."
+    log_message "Starte Deinstallation..."
 
     # Systemd-Service stoppen und deaktivieren
-    echo "Stoppe und deaktiviere den Modbus SmartBridge Service..."
+    log_message "Stoppe und deaktiviere den Modbus SmartBridge Service..."
     sudo systemctl stop modbus_smartbridge.service
     sudo systemctl disable modbus_smartbridge.service
     sudo rm -f $SERVICE_FILE
@@ -104,19 +131,25 @@ uninstall() {
 
     # Dateien entfernen, abhängig vom Argument --purge
     if [[ "$1" == "--purge" ]]; then
-        echo "Vollständige Deinstallation inklusive Konfigurationsdatei..."
+        log_message "Vollständige Deinstallation inklusive Konfigurationsdatei..."
         sudo rm -rf "$INSTALL_DIR"
         sudo rm -f "$CONFIG_SCRIPT"
     else
-        echo "Deinstallation ohne Löschen der Konfigurationsdatei..."
+        log_message "Deinstallation ohne Löschen der Konfigurationsdatei..."
         sudo rm -rf "$INSTALL_DIR"
         # Konfigurationsdatei beibehalten
         sudo mkdir -p "$INSTALL_DIR"
         sudo mv "$CONFIG_FILE" "$INSTALL_DIR/"
     fi
 
-    echo "Modbus SmartBridge wurde erfolgreich deinstalliert."
+    log_message "Modbus SmartBridge wurde erfolgreich deinstalliert."
 }
+
+# Überprüfen auf Root-Berechtigungen
+if [ "$EUID" -ne 0 ]; then 
+    echo "Bitte führen Sie das Skript mit Root-Rechten aus (sudo)."
+    exit 1
+fi
 
 # Skriptoptionen analysieren
 if [[ "$1" == "--uninstall" ]]; then
